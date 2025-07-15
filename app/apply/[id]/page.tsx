@@ -14,6 +14,50 @@ export default function ApplyPage({ params }: { params: { id: string } }) {
   const [photoUploaded, setPhotoUploaded] = useState(false)
   const [cvScore, setCvScore] = useState<number | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
+  const [selectedCvFile, setSelectedCvFile] = useState<File | null>(null)
+  const [selectedPhotoFile, setSelectedPhotoFile] = useState<File | null>(null)
+
+  const handleCvFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      // Validate file type
+      const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+      if (!allowedTypes.includes(file.type)) {
+        alert('Please upload a PDF, DOC, or DOCX file.')
+        return
+      }
+      
+      // Validate file size (5MB max)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size must be less than 5MB.')
+        return
+      }
+      
+      setSelectedCvFile(file)
+      handleCvUpload()
+    }
+  }
+
+  const handlePhotoFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png']
+      if (!allowedTypes.includes(file.type)) {
+        alert('Please upload a JPG or PNG file.')
+        return
+      }
+      
+      // Validate file size (2MB max)
+      if (file.size > 2 * 1024 * 1024) {
+        alert('File size must be less than 2MB.')
+        return
+      }
+      
+      setSelectedPhotoFile(file)
+      handlePhotoUpload()
+    }
+  }
 
   const handleCvUpload = () => {
     setAnalyzing(true)
@@ -87,13 +131,29 @@ export default function ApplyPage({ params }: { params: { id: string } }) {
               </CardHeader>
               <CardContent className="space-y-6">
                 {!analyzing && !cvUploaded && (
-                  <div className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center hover:border-red-500 transition-colors cursor-pointer">
-                    <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-300 mb-2">Click to upload or drag and drop</p>
-                    <p className="text-gray-500 text-sm">PDF, DOC, DOCX (Max 5MB)</p>
-                    <Button className="mt-4 bg-red-600 hover:bg-red-700" onClick={handleCvUpload}>
-                      Upload CV
-                    </Button>
+                  <div>
+                    <input
+                      type="file"
+                      id="cv-upload"
+                      accept=".pdf,.doc,.docx"
+                      onChange={handleCvFileSelect}
+                      className="hidden"
+                    />
+                    <label
+                      htmlFor="cv-upload"
+                      className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center hover:border-red-500 transition-colors cursor-pointer block"
+                    >
+                      <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-300 mb-2">
+                        {selectedCvFile ? `Selected: ${selectedCvFile.name}` : "Click to upload or drag and drop"}
+                      </p>
+                      <p className="text-gray-500 text-sm">PDF, DOC, DOCX (Max 5MB)</p>
+                      {!selectedCvFile && (
+                        <Button type="button" className="mt-4 bg-red-600 hover:bg-red-700">
+                          Choose File
+                        </Button>
+                      )}
+                    </label>
                   </div>
                 )}
 
@@ -138,13 +198,29 @@ export default function ApplyPage({ params }: { params: { id: string } }) {
                   </AlertDescription>
                 </Alert>
 
-                <div className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center hover:border-red-500 transition-colors cursor-pointer">
-                  <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-300 mb-2">Upload your profile photo</p>
-                  <p className="text-gray-500 text-sm">JPG, PNG (Max 2MB)</p>
-                  <Button className="mt-4 bg-red-600 hover:bg-red-700" onClick={handlePhotoUpload}>
-                    Upload Photo
-                  </Button>
+                <div>
+                  <input
+                    type="file"
+                    id="photo-upload"
+                    accept=".jpg,.jpeg,.png"
+                    onChange={handlePhotoFileSelect}
+                    className="hidden"
+                  />
+                  <label
+                    htmlFor="photo-upload"
+                    className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center hover:border-red-500 transition-colors cursor-pointer block"
+                  >
+                    <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-300 mb-2">
+                      {selectedPhotoFile ? `Selected: ${selectedPhotoFile.name}` : "Upload your profile photo"}
+                    </p>
+                    <p className="text-gray-500 text-sm">JPG, PNG (Max 2MB)</p>
+                    {!selectedPhotoFile && (
+                      <Button type="button" className="mt-4 bg-red-600 hover:bg-red-700">
+                        Choose Photo
+                      </Button>
+                    )}
+                  </label>
                 </div>
               </CardContent>
             </Card>
