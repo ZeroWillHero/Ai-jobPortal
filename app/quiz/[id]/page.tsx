@@ -201,7 +201,7 @@ export default function QuizPage({ params }: { params: { id: string } }) {
         </div>
       </nav>
 
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 select-none">
         <div className="max-w-4xl mx-auto">
           {/* Progress */}
           <div className="mb-8">
@@ -215,9 +215,9 @@ export default function QuizPage({ params }: { params: { id: string } }) {
           </div>
 
           {/* Question Card */}
-          <Card className="bg-gray-800 border-gray-700 mb-8">
+          <Card className="bg-gray-800 border-gray-700 mb-8 select-none" onContextMenu={(e) => e.preventDefault()}>
             <CardHeader>
-              <CardTitle className="text-white flex items-center">
+              <CardTitle className="text-white flex items-center select-none">
                 {question.type === "code" ? (
                   <Code className="h-5 w-5 mr-2 text-red-500" />
                 ) : (
@@ -227,18 +227,19 @@ export default function QuizPage({ params }: { params: { id: string } }) {
                 )}
                 {question.type === "code" ? "Coding Question" : "Multiple Choice"}
               </CardTitle>
-              <CardDescription className="text-gray-400">{question.question}</CardDescription>
+              <CardDescription className="text-gray-400 select-none">{question.question}</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent onContextMenu={(e) => e.preventDefault()}>
               {question.type === "mcq" ? (
                 <RadioGroup
                   value={answers[question.id]?.toString()}
                   onValueChange={(value) => handleAnswerChange(question.id, Number.parseInt(value))}
+                  className="select-none"
                 >
                   {question.options?.map((option, index) => (
-                    <div key={index} className="flex items-center space-x-2">
+                    <div key={index} className="flex items-center space-x-2 select-none">
                       <RadioGroupItem value={index.toString()} id={`option-${index}`} />
-                      <Label htmlFor={`option-${index}`} className="text-gray-300 cursor-pointer">
+                      <Label htmlFor={`option-${index}`} className="text-gray-300 cursor-pointer select-none">
                         {option}
                       </Label>
                     </div>
@@ -251,8 +252,9 @@ export default function QuizPage({ params }: { params: { id: string } }) {
                     value={answers[question.id] || ""}
                     onChange={(e) => handleAnswerChange(question.id, e.target.value)}
                     className="min-h-[200px] bg-gray-900 border-gray-600 text-white font-mono text-sm"
+                    onContextMenu={(e) => e.preventDefault()}
                   />
-                  <p className="text-gray-400 text-sm">
+                  <p className="text-gray-400 text-sm select-none">
                     Write your code in the text area above. Make sure your solution is complete and functional.
                   </p>
                 </div>
