@@ -2,8 +2,10 @@ import { Button } from "@/components/ui/button"
 import { ArrowRight, Briefcase, Users, Zap } from "lucide-react"
 import Link from "next/link"
 
+
 export default function HomePage() {
   return (
+    
     <div className="min-h-screen bg-gray-900">
       {/* Navigation */}
       <nav className="border-b border-gray-800 bg-gray-900/95 backdrop-blur supports-[backdrop-filter]:bg-gray-900/60">
