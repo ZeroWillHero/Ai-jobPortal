@@ -1,84 +1,39 @@
+'use client'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Briefcase, MapPin, Clock, Search, Filter } from "lucide-react"
+import { Briefcase, MapPin, Clock, Search } from "lucide-react"
 import Link from "next/link"
-
-const jobs = [
-  {
-    id: 1,
-    title: "Senior Frontend Developer",
-    company: "TechCorp Inc.",
-    location: "San Francisco, CA",
-    type: "Full-time",
-    description:
-      "We're looking for a senior frontend developer with expertise in React and TypeScript to join our growing team.",
-    requiredScore: 85,
-    salary: "$120k - $160k",
-    posted: "2 days ago",
-  },
-  {
-    id: 2,
-    title: "Full Stack Engineer",
-    company: "StartupXYZ",
-    location: "Remote",
-    type: "Full-time",
-    description:
-      "Join our innovative startup as a full stack engineer. Work with modern technologies and shape the future of our product.",
-    requiredScore: 80,
-    salary: "$100k - $140k",
-    posted: "1 week ago",
-  },
-  {
-    id: 3,
-    title: "Data Scientist",
-    company: "DataFlow Solutions",
-    location: "New York, NY",
-    type: "Full-time",
-    description:
-      "Seeking a data scientist to analyze complex datasets and build machine learning models for our clients.",
-    requiredScore: 90,
-    salary: "$130k - $170k",
-    posted: "3 days ago",
-  },
-  {
-    id: 4,
-    title: "Backend Developer",
-    company: "CloudTech",
-    location: "Austin, TX",
-    type: "Contract",
-    description:
-      "Backend developer needed for cloud infrastructure projects. Experience with AWS and microservices required.",
-    requiredScore: 75,
-    salary: "$90k - $120k",
-    posted: "5 days ago",
-  },
-  {
-    id: 5,
-    title: "UI/UX Designer",
-    company: "DesignStudio",
-    location: "Los Angeles, CA",
-    type: "Full-time",
-    description: "Creative UI/UX designer to work on cutting-edge digital products. Portfolio review required.",
-    requiredScore: 70,
-    salary: "$80k - $110k",
-    posted: "1 day ago",
-  },
-  {
-    id: 6,
-    title: "DevOps Engineer",
-    company: "InfraTech",
-    location: "Seattle, WA",
-    type: "Full-time",
-    description: "DevOps engineer to manage CI/CD pipelines and cloud infrastructure. Kubernetes experience preferred.",
-    requiredScore: 85,
-    salary: "$110k - $150k",
-    posted: "4 days ago",
-  },
-]
+import { useEffect } from "react"
+import { fetchAllJobs } from "@/redux/features/jobSlice"
+import { useAppDispatch, useAppSelector } from "@/redux/hooks"
+import type { RootState } from "@/redux/store"
 
 export default function JobsPage() {
+  const dispatch = useAppDispatch();
+  const { jobs, loading, error } = useAppSelector((state: RootState) => state.jobs);
+
+  useEffect(() => {
+    console.log('Dispatching fetchAllJobs...'); // Add logging
+    dispatch(fetchAllJobs(""));
+  }, [dispatch]);
+
+  // Add debugging logs
+  console.log('Jobs state:', { jobs, loading, error });
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 1) return "1 day ago";
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} week${Math.floor(diffDays / 7) > 1 ? 's' : ''} ago`;
+    return `${Math.floor(diffDays / 30)} month${Math.floor(diffDays / 30) > 1 ? 's' : ''} ago`;
+  };
+
   return (
     <div className="min-h-screen bg-gray-900">
       {/* Navigation */}
@@ -122,39 +77,44 @@ export default function JobsPage() {
               className="pl-10 bg-gray-800 border-gray-700 text-white placeholder-gray-400"
             />
           </div>
-          <Button variant="outline" className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent">
+          {/* <Button variant="outline" className="border-gray-600 text-gray-300 hover:bg-gray-800 bg-transparent">
             <Filter className="h-4 w-4 mr-2" />
             Filters
-          </Button>
+          </Button> */}
         </div>
 
         {/* Job Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {jobs.map((job) => (
+          {Array.isArray(jobs) && jobs.map((job) => (
             <Card key={job.id} className="bg-gray-800 border-gray-700 hover:border-red-500 transition-colors">
               <CardHeader>
                 <div className="flex justify-between items-start mb-2">
-                  <CardTitle className="text-white text-lg">{job.title}</CardTitle>
-                  <Badge variant="secondary" className="bg-red-900 text-red-200">
-                    Score: {job.requiredScore}+
-                  </Badge>
+                  <CardTitle className="text-white text-lg">{job.job_title}</CardTitle>
+                  <div className="flex flex-col gap-1">
+                    <Badge variant="secondary" className="bg-red-900 text-red-200 text-xs">
+                      CV: {job.cv_score}+
+                    </Badge>
+                    <Badge variant="secondary" className="bg-blue-900 text-blue-200 text-xs">
+                      Quiz: {job.quiz_score}+
+                    </Badge>
+                  </div>
                 </div>
-                <CardDescription className="text-gray-400">{job.company}</CardDescription>
+                <CardDescription className="text-gray-400">AI JobPortal</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2 mb-4">
                   <div className="flex items-center text-gray-400 text-sm">
                     <MapPin className="h-4 w-4 mr-1" />
-                    {job.location}
+                    Remote
                   </div>
                   <div className="flex items-center text-gray-400 text-sm">
                     <Clock className="h-4 w-4 mr-1" />
-                    {job.type} • {job.posted}
+                    Full-time • {formatDate(job.created_at)}
                   </div>
                 </div>
-                <p className="text-gray-300 text-sm mb-4">{job.description}</p>
+                <p className="text-gray-300 text-sm mb-4 line-clamp-3">{job.description}</p>
                 <div className="flex justify-between items-center">
-                  <span className="text-red-400 font-semibold">{job.salary}</span>
+                  <span className="text-red-400 font-semibold">Competitive</span>
                 </div>
               </CardContent>
               <CardFooter>
@@ -165,6 +125,13 @@ export default function JobsPage() {
             </Card>
           ))}
         </div>
+
+        {/* No Jobs State */}
+        {!loading && !error && (!Array.isArray(jobs) || jobs.length === 0) && (
+          <div className="text-center text-gray-400">
+            <p>No jobs available at the moment.</p>
+          </div>
+        )}
       </div>
     </div>
   )
