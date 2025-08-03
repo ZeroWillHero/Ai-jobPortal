@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import StoreProvider from '@/components/context/storeProvider'
 
 export const metadata: Metadata = {
   title: 'v0 App',
@@ -13,8 +14,11 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+      <html lang="en">
+      <body>
+        <StoreProvider>{children}</StoreProvider>
+      </body>
     </html>
+    
   )
 }

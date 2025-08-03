@@ -1,6 +1,9 @@
 import { Button } from "@/components/ui/button"
+import { fetchAllJobs, Job } from "@/redux/features/jobSlice";
+import { AsyncThunkAction, ThunkDispatch, UnknownAction } from "@reduxjs/toolkit";
 import { ArrowRight, Briefcase, Users, Zap } from "lucide-react"
 import Link from "next/link"
+
 
 export default function HomePage() {
   return (
@@ -115,3 +118,7 @@ export default function HomePage() {
     </div>
   )
 }
+function dispatch(arg0: AsyncThunkAction<Job[], string, { state?: unknown; dispatch?: ThunkDispatch<unknown, unknown, UnknownAction>; extra?: unknown; rejectValue?: unknown; serializedErrorType?: unknown; pendingMeta?: unknown; fulfilledMeta?: unknown; rejectedMeta?: unknown; }>) {
+  throw new Error("Function not implemented.");
+}
+
