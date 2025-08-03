@@ -32,6 +32,14 @@ export default function ApplyPage({ params }: { params: Promise<{ id: string }> 
   const [hasProfilePhoto, setHasProfilePhoto] = useState<boolean | null>(null)
   const [apiError, setApiError] = useState<string>("")
   const [isClient, setIsClient] = useState(false) // Add client-side check
+  
+  // Add new state variables for detailed score display and face detection
+  const [detailedScores, setDetailedScores] = useState<any>(null)
+  const [analysisReport, setAnalysisReport] = useState<string>("")
+  const [atsScore, setAtsScore] = useState<number>(0)
+  const [faceDetecting, setFaceDetecting] = useState(false)
+  const [faceDetectionResult, setFaceDetectionResult] = useState<any>(null)
+  const [successMessage, setSuccessMessage] = useState<string>("")
 
   // Fix hydration mismatch by ensuring client-side rendering
   useEffect(() => {
@@ -104,106 +112,199 @@ export default function ApplyPage({ params }: { params: Promise<{ id: string }> 
       }
 
       setSelectedPhotoFile(file)
-      handlePhotoUpload()
+      // Don't auto-upload, let user click the upload button
     }
   }
 
-
-const handleCvUpload = async (file: File) => {
-  if (!currentJob) {
-    alert('Job information not loaded. Please try again.')
-    return
-  }
-
-  setAnalyzing(true)
-  setApiError("")
-
-  try {
-    // Create FormData for file upload
-    const formData = new FormData()
-    formData.append('resume', file)
-    // Send job description with the correct field name
-    formData.append('job_description', currentJob.description)
-
-    // Call the CV analyzer API
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/callExternalApi/cv-analyzer`, {
-      method: 'POST',
-      body: formData,
-      credentials: 'include', // Include cookies for authentication
-    })
-
-    // Check for 401 unauthorized
-    if (response.status === 401) {
-      handleUnauthorized()
+  const handleCvUpload = async (file: File) => {
+    if (!currentJob) {
+      alert('Job information not loaded. Please try again.')
       return
     }
 
-    if (!response.ok) {
-      const errorData = await response.text()
-      console.error('API Error Response:', errorData)
-      throw new Error(`API call failed: ${response.status} ${response.statusText}`)
-    }
+    setAnalyzing(true)
+    setApiError("")
 
-    const result = await response.json()
-    console.log('API Response:', result)
-    
-    // Process the API response
-    if (result.success) {
-      setCvUploaded(true)
-      setCvScore(result.data.score || Math.floor(Math.random() * 20) + 80)
-      setHasProfilePhoto(result.data.hasProfilePhoto || Math.random() > 0.5)
-      setAnalyzing(false)
+    try {
+      // Create FormData for file upload
+      const formData = new FormData()
+      formData.append('resume', file)
+      // Send job description with the correct field name
+      formData.append('job_description', currentJob.description)
+
+      // Call the CV analyzer API
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/callExternalApi/cv-analyzer`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include', // Include cookies for authentication
+      })
+
+      // Check for 401 unauthorized
+      if (response.status === 401) {
+        handleUnauthorized()
+        return
+      }
+
+      if (!response.ok) {
+        const errorData = await response.text()
+        console.error('API Error Response:', errorData)
+        throw new Error(`API call failed: ${response.status} ${response.statusText}`)
+      }
+
+      const result = await response.json()
+      console.log('API Response:', result)
       
-      // Determine next step based on results
-      const score = result.data.score || Math.floor(Math.random() * 20) + 80
-      const hasPhoto = result.data.hasProfilePhoto || Math.random() > 0.5
-      
-      if (score >= (currentJob.cv_score || 75)) {
-        if (hasPhoto) {
-          setStep(3) // Proceed to quiz
+      // Process the API response
+      if (result.success) {
+        setCvUploaded(true)
+        
+        // Convert decimal score to percentage (0.7778 -> 78%)
+        const scoreFromApi = result.scores?.average_score || 0
+        const percentageScore = Math.round(scoreFromApi * 100)
+        setCvScore(percentageScore)
+        
+        // Store detailed scores and analysis
+        setDetailedScores(result.scores)
+        setAnalysisReport(result.analysis?.detailed_report || "")
+        const atsScoreValue = Math.round((result.scores?.ats_similarity_score || 0) * 100)
+        setAtsScore(atsScoreValue)
+        
+        // Check if profile photo was detected
+        const hasPhoto = result.analysis?.has_profile_photo || false
+        setHasProfilePhoto(hasPhoto)
+        
+        setAnalyzing(false)
+        
+        // Determine next step based on results
+        if (percentageScore >= (currentJob.cv_score || 75)) {
+          if (hasPhoto) {
+            setStep(3) // Proceed to quiz
+          } else {
+            setStep(2) // Upload photo
+          }
         } else {
-          setStep(2) // Upload photo
+          setStep(3) // Show failure
         }
       } else {
-        setStep(3) // Show failure
+        throw new Error(result.message || 'CV analysis failed')
       }
-    } else {
-      throw new Error(result.message || 'CV analysis failed')
+    } catch (error: any) {
+      console.error('CV upload error:', error)
+      
+      // Check for 401 in error message
+      if (error.message?.includes('401') || error.status === 401) {
+        handleUnauthorized()
+        return
+      }
+      
+      setApiError(error.message || 'Failed to analyze CV. Please try again.')
+      setAnalyzing(false)
+      
+      // Fallback to simulation if API fails (but not for auth errors)
+      setTimeout(() => {
+        setCvUploaded(true)
+        setCvScore(Math.floor(Math.random() * 20) + 80)
+        setHasProfilePhoto(Math.random() > 0.5)
+        setAnalyzing(false)
+        if (Math.random() > 0.5) {
+          setStep(2)
+        } else {
+          setStep(3)
+        }
+      }, 1000)
     }
-  } catch (error: any) {
-    console.error('CV upload error:', error)
-    
-    // Check for 401 in error message
-    if (error.message?.includes('401') || error.status === 401) {
-      handleUnauthorized()
+  }
+
+  
+  const handlePhotoUpload = async (file?: File) => {
+    const photoFile = file || selectedPhotoFile
+    if (!photoFile) {
+      alert('No photo file selected.')
       return
     }
-    
-    setApiError(error.message || 'Failed to analyze CV. Please try again.')
-    setAnalyzing(false)
-    
-    // Fallback to simulation if API fails (but not for auth errors)
-    setTimeout(() => {
-      setCvUploaded(true)
-      setCvScore(Math.floor(Math.random() * 20) + 80)
-      setHasProfilePhoto(Math.random() > 0.5)
-      setAnalyzing(false)
-      if (Math.random() > 0.5) {
-        setStep(2)
-      } else {
-        setStep(3)
+  
+    setFaceDetecting(true)
+    setApiError("") // Clear error messages
+    setSuccessMessage("") // Clear success messages
+  
+    try {
+      // Convert to base64 with data URL prefix
+      const convertToDataURL = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.readAsDataURL(file)
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = (error) => reject(error)
+        })
       }
-    }, 1000)
+  
+      const dataURL = await convertToDataURL(photoFile)
+  
+      // Send as data URL
+      const response = await fetch(`${process.env.NEXT_PUBLIC_OPEN_CV_API_URL}/api/set-reference`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image: dataURL
+        }),
+        credentials: 'include',
+      })
+  
+      // Check for 401 unauthorized
+      if (response.status === 401) {
+        handleUnauthorized()
+        return
+      }
+  
+      if (!response.ok) {
+        const errorData = await response.text()
+        console.error('Face Detection API Error:', errorData)
+        throw new Error(`Face detection failed: ${response.status} ${response.statusText}`)
+      }
+  
+      const result = await response.json()
+      console.log('Face Detection Response:', result)
+  
+      // Handle the specific API response format: {message: 'Reference image set successfully', success: true}
+      if (result.success === true) {
+        // Since success=true means face was detected and reference was set
+        setSuccessMessage('🎉 Face detected successfully! Your profile photo meets the requirements.')
+        
+        setFaceDetectionResult({
+          ...result,
+          faces_detected: 1, // Assume 1 face detected since API succeeded
+          success: true,
+          message: result.message
+        })
+        setPhotoUploaded(true)
+        setHasProfilePhoto(true)
+        setFaceDetecting(false)
+        
+        // Show success message briefly before proceeding
+        setTimeout(() => {
+          setStep(3)
+        }, 2000) // Wait 2 seconds to show success message
+      } else {
+        // If success is false or not present, treat as failure
+        setFaceDetecting(false)
+        setApiError(result.message || 'Face detection failed. Please try again with a clearer photo.')
+      }
+    } catch (error: any) {
+      console.error('Face detection error:', error)
+      
+      // Check for 401 in error message
+      if (error.message?.includes('401') || error.status === 401) {
+        handleUnauthorized()
+        return
+      }
+      
+      setApiError(error.message || 'Failed to detect face in photo. Please try again with a clearer photo.')
+      setFaceDetecting(false)
+    }
   }
-}
-
-
-  const handlePhotoUpload = () => {
-    setPhotoUploaded(true)
-    setHasProfilePhoto(true)
-    setStep(3)
-  }
-
+  
   const startQuiz = () => {
     // Store the current application state before redirecting
     if (typeof window !== 'undefined') {
@@ -413,19 +514,78 @@ const handleCvUpload = async (file: File) => {
 
                 {cvUploaded && cvScore && currentJob && (
                   <div className="space-y-4">
+                    {/* Main Score Alert */}
                     <Alert className={`${cvScore >= (currentJob.cv_score || 75) ? 'border-green-500 bg-green-900/20' : 'border-red-500 bg-red-900/20'}`}>
                       <CheckCircle className={`h-4 w-4 ${cvScore >= (currentJob.cv_score || 75) ? 'text-green-500' : 'text-red-500'}`} />
                       <AlertDescription className={`${cvScore >= (currentJob.cv_score || 75) ? 'text-green-200' : 'text-red-200'}`}>
-                        CV analyzed successfully! Your score: <strong>{cvScore}/100</strong>
-                        {cvScore >= (currentJob.cv_score || 75) ? " - You meet the requirements!" : ` - Score too low for this position (required: ${currentJob.cv_score || 75}).`}
+                        <div className="space-y-3">
+                          <div>
+                            <strong>Overall CV Score: {cvScore}/100</strong>
+                            {cvScore >= (currentJob.cv_score || 75) ? " - You meet the requirements!" : ` - Score too low for this position (required: ${currentJob.cv_score || 75}).`}
+                          </div>
+                          
+                          {/* Detailed Score Breakdown */}
+                          {detailedScores && (
+                            <div className="mt-3 p-3 bg-gray-800/50 rounded-lg text-sm">
+                              <div className="font-semibold mb-2 text-white">📊 Score Breakdown:</div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="flex justify-between">
+                                  <span className="text-gray-300">ATS Compatibility:</span>
+                                  <span className={`font-medium ${atsScore >= 70 ? 'text-green-400' : atsScore >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                    {atsScore}%
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-gray-300">Criteria Evaluated:</span>
+                                  <span className="font-medium text-blue-400">{detailedScores.total_criteria || 0}</span>
+                                </div>
+                              </div>
+                              
+                              {/* Individual Scores */}
+                              {detailedScores.individual_scores && detailedScores.individual_scores.length > 0 && (
+                                <div className="mt-3">
+                                  <div className="font-semibold mb-2 text-white">🎯 Individual Criteria:</div>
+                                  <div className="grid grid-cols-3 gap-2">
+                                    {detailedScores.individual_scores.map((score: number, index: number) => (
+                                      <div key={index} className="flex justify-between text-xs bg-gray-700/50 p-1 rounded">
+                                        <span className="text-gray-400">#{index + 1}:</span>
+                                        <span className={`font-medium ${score >= 0.7 ? 'text-green-400' : score >= 0.5 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                          {Math.round(score * 100)}%
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </AlertDescription>
                     </Alert>
+
+                    {/* Analysis Report */}
+                    {analysisReport && (
+                      <Alert className="border-blue-500 bg-blue-900/20">
+                        <AlertCircle className="h-4 w-4 text-blue-500" />
+                        <AlertDescription className="text-blue-200">
+                          <div className="space-y-2">
+                            <div className="font-semibold flex items-center">
+                              <span className="mr-2">🤖</span>
+                              AI Analysis Report:
+                            </div>
+                            <div className="text-sm whitespace-pre-line bg-gray-800/50 p-3 rounded-lg max-h-40 overflow-y-auto border-l-4 border-blue-400">
+                              {analysisReport}
+                            </div>
+                          </div>
+                        </AlertDescription>
+                      </Alert>
+                    )}
 
                     {/* Photo Detection Result */}
                     <Alert className={`${hasProfilePhoto ? 'border-green-500 bg-green-900/20' : 'border-yellow-500 bg-yellow-900/20'}`}>
                       <User className={`h-4 w-4 ${hasProfilePhoto ? 'text-green-500' : 'text-yellow-500'}`} />
                       <AlertDescription className={`${hasProfilePhoto ? 'text-green-200' : 'text-yellow-200'}`}>
-                        Profile Photo: {hasProfilePhoto ? "Detected in CV" : "Not found in CV"}
+                        Profile Photo: {hasProfilePhoto ? "✅ Detected in CV" : "❌ Not found in CV"}
                         {!hasProfilePhoto && cvScore >= (currentJob.cv_score || 75) && " - You'll need to upload one separately."}
                       </AlertDescription>
                     </Alert>
@@ -455,59 +615,120 @@ const handleCvUpload = async (file: File) => {
                   Profile Photo Required
                 </CardTitle>
                 <CardDescription className="text-gray-400">
-                  Our AI didn't detect a profile photo in your CV. Please upload one to continue.
+                  Our AI didn't detect a profile photo in your CV. Please upload one to continue. We'll use OpenCV to detect your face.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <Alert className="border-yellow-500 bg-yellow-900/20">
                   <AlertCircle className="h-4 w-4 text-yellow-500" />
                   <AlertDescription className="text-yellow-200">
-                    A professional profile photo is required for this position. Make sure it's clear and professional.
+                    A professional profile photo is required for this position. Make sure it's clear and professional with your face clearly visible.
                   </AlertDescription>
                 </Alert>
 
-                <div>
-                  <input
-                    type="file"
-                    id="photo-upload"
-                    accept=".jpg,.jpeg,.png"
-                    onChange={handlePhotoFileSelect}
-                    className="hidden"
-                  />
-                  <label
-                    htmlFor="photo-upload"
-                    className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center hover:border-red-500 transition-colors cursor-pointer block"
-                  >
-                    <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-300 mb-2">
-                      {selectedPhotoFile ? `Selected: ${selectedPhotoFile.name}` : "Upload your profile photo"}
-                    </p>
-                    <p className="text-gray-500 text-sm">JPG, PNG (Max 2MB)</p>
+                {/* Face Detection in Progress */}
+                {faceDetecting && (
+                  <div className="text-center py-8">
+                    <Clock className="h-12 w-12 text-red-500 mx-auto mb-4 animate-spin" />
+                    <p className="text-white mb-2">Detecting face in your photo...</p>
+                    <div className="space-y-1">
+                      <p className="text-gray-400 text-sm">• Analyzing image quality</p>
+                      <p className="text-gray-400 text-sm">• Detecting facial features</p>
+                      <p className="text-gray-400 text-sm">• Validating photo requirements</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Photo Upload Section */}
+                {!faceDetecting && !photoUploaded && (
+                  <div>
+                    <input
+                      type="file"
+                      id="photo-upload"
+                      accept=".jpg,.jpeg,.png"
+                      onChange={handlePhotoFileSelect}
+                      className="hidden"
+                    />
+                    <label
+                      htmlFor="photo-upload"
+                      className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center hover:border-red-500 transition-colors cursor-pointer block"
+                    >
+                      <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-300 mb-2">
+                        {selectedPhotoFile ? `Selected: ${selectedPhotoFile.name}` : "Upload your profile photo"}
+                      </p>
+                      <p className="text-gray-500 text-sm">JPG, PNG (Max 2MB) • Face detection enabled</p>
+                      {!selectedPhotoFile && (
+                        <Button type="button" className="mt-4 bg-red-600 hover:bg-red-700">
+                          Choose Photo
+                        </Button>
+                      )}
+                    </label>
+                    
                     {selectedPhotoFile && !photoUploaded && (
-                      <Button 
-                        type="button" 
-                        className="mt-4 bg-red-600 hover:bg-red-700"
-                        onClick={handlePhotoUpload}
-                      >
-                        Upload Photo
-                      </Button>
+                      <div className="mt-4 text-center">
+                        <Button 
+                          type="button" 
+                          className="bg-red-600 hover:bg-red-700"
+                          onClick={() => handlePhotoUpload()}
+                          disabled={faceDetecting}
+                        >
+                          {faceDetecting ? "Detecting Face..." : "Upload & Detect Face"}
+                        </Button>
+                      </div>
                     )}
-                    {!selectedPhotoFile && (
-                      <Button type="button" className="mt-4 bg-red-600 hover:bg-red-700">
-                        Choose Photo
-                      </Button>
-                    )}
-                  </label>
-                </div>
+                  </div>
+                )}
+
+                {/* Face Detection Success */}
+                {photoUploaded && faceDetectionResult && (
+                  <Alert className="border-green-500 bg-green-900/20">
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    <AlertDescription className="text-green-200">
+                      <div className="space-y-2">
+                        <div className="font-semibold">✅ Face Detection Successful!</div>
+                        <div className="text-sm">
+                          <div>• Faces detected: {faceDetectionResult.faces_detected}</div>
+                          {faceDetectionResult.confidence && (
+                            <div>• Detection confidence: {Math.round(faceDetectionResult.confidence * 100)}%</div>
+                          )}
+                          {faceDetectionResult.image_quality && (
+                            <div>• Image quality: {faceDetectionResult.image_quality}</div>
+                          )}
+                        </div>
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Show API Error */}
+                {apiError && !apiError.includes('401') && (
+                  <Alert className="border-red-500 bg-red-900/20">
+                    <AlertCircle className="h-4 w-4 text-red-500" />
+                    <AlertDescription className="text-red-200">
+                      {apiError}
+                    </AlertDescription>
+                  </Alert>
+                )}
 
                 <div className="flex justify-between">
                   <Button 
                     variant="outline"
                     onClick={() => setStep(1)}
                     className="border-gray-600 text-gray-300 hover:bg-gray-700 bg-transparent"
+                    disabled={faceDetecting}
                   >
                     Back to CV Upload
                   </Button>
+                  
+                  {photoUploaded && (
+                    <Button 
+                      onClick={() => setStep(3)}
+                      className="bg-red-600 hover:bg-red-700 text-white"
+                    >
+                      Proceed to Quiz
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -530,9 +751,15 @@ const handleCvUpload = async (file: File) => {
                   <h3 className="text-white font-semibold mb-4">Application Summary</h3>
                   <div className="space-y-2">
                     <div className="flex justify-between">
-                      <span className="text-gray-400">CV Score:</span>
+                      <span className="text-gray-400">Overall CV Score:</span>
                       <span className="text-green-400 font-semibold">{cvScore}/100</span>
                     </div>
+                    {detailedScores && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">ATS Compatibility:</span>
+                        <span className="text-blue-400 font-semibold">{atsScore}%</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-gray-400">Required Score:</span>
                       <span className="text-gray-400">{currentJob.cv_score || 75}/100</span>
@@ -600,6 +827,9 @@ const handleCvUpload = async (file: File) => {
                         setHasProfilePhoto(null);
                         setSelectedCvFile(null);
                         setApiError("");
+                        setDetailedScores(null);
+                        setAnalysisReport("");
+                        setFaceDetectionResult(null);
                       }}
                       className="bg-red-600 hover:bg-red-700 text-white"
                     >
