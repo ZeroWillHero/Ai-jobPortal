@@ -121,4 +121,3 @@ export default function HomePage() {
 function dispatch(arg0: AsyncThunkAction<Job[], string, { state?: unknown; dispatch?: ThunkDispatch<unknown, unknown, UnknownAction>; extra?: unknown; rejectValue?: unknown; serializedErrorType?: unknown; pendingMeta?: unknown; fulfilledMeta?: unknown; rejectedMeta?: unknown; }>) {
   throw new Error("Function not implemented.");
 }
-
