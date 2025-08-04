@@ -1,67 +1,88 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useParams } from "next/navigation"
 import { Progress } from "@/components/ui/progress"
 import { Navigation } from "@/components/common/Navigation"
 import { QuizQuestion } from "@/components/quiz/QuizQuestion"
 import { QuizNavigation } from "@/components/quiz/QuizNavigation"
 import { QuizResults } from "@/components/quiz/QuizResults"
+import { useAppDispatch, useAppSelector } from "@/redux/hooks"
+import { 
+  generateQuestions, 
+  setAnswer, 
+  nextQuestion, 
+  previousQuestion,
+  selectQuestions,
+  selectCurrentQuestion,
+  selectCurrentQuestionIndex,
+  selectAnswers,
+  selectQuestionsLoading,
+  selectQuestionsError,
+  selectTopic,
+  selectTotalQuestions,
+  selectQuizProgress,
+  resetQuiz
+} from "@/redux/features/questionSlice"
 
-const quizQuestions = [
-  {
-    id: 1,
-    type: "mcq",
-    question: "Which of the following is NOT a JavaScript data type?",
-    options: ["String", "Boolean", "Integer", "Undefined"],
-    correct: 2,
-  },
-  {
-    id: 2,
-    type: "code",
-    question: "Write a function that returns the sum of two numbers:",
-    placeholder: "function sum(a, b) {\n  // Your code here\n}",
-    solution: "function sum(a, b) {\n  return a + b;\n}",
-  },
-  {
-    id: 3,
-    type: "mcq",
-    question: "What does CSS stand for?",
-    options: ["Computer Style Sheets", "Cascading Style Sheets", "Creative Style Sheets", "Colorful Style Sheets"],
-    correct: 1,
-  },
-  {
-    id: 4,
-    type: "code",
-    question: "Create a React component that displays 'Hello World':",
-    placeholder:
-      "import React from 'react';\n\nfunction HelloWorld() {\n  // Your code here\n}\n\nexport default HelloWorld;",
-    solution:
-      "import React from 'react';\n\nfunction HelloWorld() {\n  return <div>Hello World</div>;\n}\n\nexport default HelloWorld;",
-  },
-  {
-    id: 5,
-    type: "mcq",
-    question: "Which HTTP method is used to update a resource?",
-    options: ["GET", "POST", "PUT", "DELETE"],
-    correct: 2,
-  },
-]
+export default function QuizPage() {
+  const params = useParams()
+  const dispatch = useAppDispatch()
+  
+  // Redux selectors
+  const questions = useAppSelector(selectQuestions)
+  const currentQuestion = useAppSelector(selectCurrentQuestion)
+  const currentQuestionIndex = useAppSelector(selectCurrentQuestionIndex)
+  const answers = useAppSelector(selectAnswers)
+  const loading = useAppSelector(selectQuestionsLoading)
+  const error = useAppSelector(selectQuestionsError)
+  const topic = useAppSelector(selectTopic)
+  const totalQuestions = useAppSelector(selectTotalQuestions)
+  const progress = useAppSelector(selectQuizProgress)
 
-export default function QuizPage({ params }: { params: { id: string } }) {
-  const [currentQuestion, setCurrentQuestion] = useState(0)
-  const [answers, setAnswers] = useState<{ [key: number]: any }>({})
+  // Local state
   const [timeLeft, setTimeLeft] = useState(3600) // 60 minutes in seconds
   const [quizCompleted, setQuizCompleted] = useState(false)
   const [score, setScore] = useState<number | null>(null)
+  const [quizStarted, setQuizStarted] = useState(false)
 
+  // Get topic from localStorage or URL params
   useEffect(() => {
-    if (timeLeft > 0 && !quizCompleted) {
+    const initializeQuiz = () => {
+      // Try to get topic from localStorage (from application state)
+      const applicationState = localStorage.getItem('applicationState')
+      let quizTopic = 'javascript begginers' // default topic
+      
+      if (applicationState) {
+        try {
+          const parsedState = JSON.parse(applicationState)
+          // You can set topic based on job requirements or CV analysis
+          quizTopic = parsedState.topic || 'javascript begginers'
+        } catch (error) {
+          console.error('Error parsing application state:', error)
+        }
+      }
+
+      // Reset quiz state and generate new questions
+      dispatch(resetQuiz())
+      dispatch(generateQuestions(quizTopic))
+      setQuizStarted(true)
+    }
+
+    if (!quizStarted) {
+      initializeQuiz()
+    }
+  }, [dispatch, quizStarted])
+
+  // Timer effect
+  useEffect(() => {
+    if (timeLeft > 0 && !quizCompleted && questions.length > 0) {
       const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000)
       return () => clearTimeout(timer)
-    } else if (timeLeft === 0) {
+    } else if (timeLeft === 0 && questions.length > 0) {
       handleSubmitQuiz()
     }
-  }, [timeLeft, quizCompleted])
+  }, [timeLeft, quizCompleted, questions.length])
 
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60)
@@ -70,47 +91,116 @@ export default function QuizPage({ params }: { params: { id: string } }) {
   }
 
   const handleAnswerChange = (questionId: number, answer: any) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: answer }))
+    dispatch(setAnswer({ questionId, answer }))
   }
 
   const handleNext = () => {
-    if (currentQuestion < quizQuestions.length - 1) {
-      setCurrentQuestion(currentQuestion + 1)
-    }
+    dispatch(nextQuestion())
   }
 
   const handlePrevious = () => {
-    if (currentQuestion > 0) {
-      setCurrentQuestion(currentQuestion - 1)
-    }
+    dispatch(previousQuestion())
   }
 
   const handleSubmitQuiz = () => {
-    // Calculate score (simplified)
+    // Calculate score
     let correctAnswers = 0
-    quizQuestions.forEach((question) => {
-      if (question.type === "mcq" && answers[question.id] === question.correct) {
-        correctAnswers++
-      } else if (question.type === "code" && answers[question.id]) {
-        // Simplified code evaluation - in real app, this would be more sophisticated
-        correctAnswers += 0.8 // Assume partial credit for code questions
+    let totalMCQQuestions = 0
+    let totalCodeQuestions = 0
+    
+    questions.forEach((question) => {
+      if (question.type === "mcq") {
+        totalMCQQuestions++
+        if (answers[question.id] === question.correct) {
+          correctAnswers++
+        }
+      } else if (question.type === "code") {
+        totalCodeQuestions++
+        if (answers[question.id] && answers[question.id].trim().length > 0) {
+          // Simplified code evaluation - give partial credit for any attempt
+          correctAnswers += 0.8
+        }
       }
     })
 
-    const finalScore = Math.round((correctAnswers / quizQuestions.length) * 100)
+    const finalScore = Math.round((correctAnswers / questions.length) * 100)
     setScore(finalScore)
     setQuizCompleted(true)
+
+    // Save results to localStorage
+    const applicationState = localStorage.getItem('applicationState')
+    if (applicationState) {
+      try {
+        const parsedState = JSON.parse(applicationState)
+        const updatedState = {
+          ...parsedState,
+          quizScore: finalScore,
+          quizCompleted: true,
+          answers: answers
+        }
+        localStorage.setItem('applicationState', JSON.stringify(updatedState))
+      } catch (error) {
+        console.error('Error saving quiz results:', error)
+      }
+    }
   }
 
-  const question = quizQuestions[currentQuestion]
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto mb-4"></div>
+          <p className="text-white text-lg">Generating your personalized quiz...</p>
+          <p className="text-gray-400 text-sm mt-2">This may take a few moments</p>
+        </div>
+      </div>
+    )
+  }
 
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="bg-red-900/20 border border-red-500 rounded-lg p-6 max-w-md">
+            <h2 className="text-red-400 text-xl font-semibold mb-2">Quiz Generation Failed</h2>
+            <p className="text-gray-300 mb-4">{error}</p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // No questions loaded yet
+  if (!questions || questions.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-white text-lg">Preparing your quiz...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Quiz completed
   if (quizCompleted) {
     return (
       <div className="min-h-screen bg-gray-900">
         <Navigation />
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="max-w-2xl mx-auto">
-            <QuizResults score={score || 0} />
+            <QuizResults 
+              score={score || 0} 
+              totalQuestions={totalQuestions}
+              topic={topic || 'Assessment'}
+            />
           </div>
         </div>
       </div>
@@ -126,27 +216,35 @@ export default function QuizPage({ params }: { params: { id: string } }) {
           {/* Progress */}
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
-              <h1 className="text-2xl font-bold text-white">Assessment Quiz</h1>
+              <h1 className="text-2xl font-bold text-white">
+                {topic ? `${topic} Assessment` : 'Assessment Quiz'}
+              </h1>
               <span className="text-gray-400">
-                Question {currentQuestion + 1} of {quizQuestions.length}
+                Question {currentQuestionIndex + 1} of {totalQuestions}
               </span>
             </div>
-            <Progress value={((currentQuestion + 1) / quizQuestions.length) * 100} className="h-2" />
+            <Progress value={progress} className="h-2" />
           </div>
 
-          <QuizQuestion
-            question={question}
-            currentQuestionIndex={currentQuestion}
-            answer={answers[question.id]}
-            onAnswerChange={handleAnswerChange}
-          />
+          {/* Display current question */}
+          {currentQuestion && (
+            <QuizQuestion
+              question={currentQuestion}
+              currentQuestionIndex={currentQuestionIndex}
+              answer={answers[currentQuestion.id]}
+              onAnswerChange={handleAnswerChange}
+            />
+          )}
 
           <QuizNavigation
-            currentQuestion={currentQuestion}
-            totalQuestions={quizQuestions.length}
+            currentQuestion={currentQuestionIndex}
+            totalQuestions={totalQuestions}
             onPrevious={handlePrevious}
             onNext={handleNext}
             onSubmit={handleSubmitQuiz}
+            canGoNext={currentQuestionIndex < totalQuestions - 1}
+            canGoPrevious={currentQuestionIndex > 0}
+            isLastQuestion={currentQuestionIndex === totalQuestions - 1}
           />
         </div>
       </div>
